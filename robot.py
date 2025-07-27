@@ -76,11 +76,14 @@ def draw_robot_orientation(ax, pose, length=0.2, color="k"):
     dy = length * np.sin(theta)
     ax.arrow(x, y, dx, dy, head_width=0.05, head_length=0.1, fc=color, ec=color)
 
-def extract_view(scene, robot_pose, view_radius=5.0):
+
+def extract_view(scene, robot_pose, view_radius=5.0, noise_std=0.0):
     """Simulate sensor view by extracting scene points within radius"""
     R, t = transform_from_pose(robot_pose)
     transformed_scene = apply_transform(scene, np.linalg.inv(R), -R.T @ t)
     local = transformed_scene[np.linalg.norm(transformed_scene, axis=1) < view_radius]
+    if noise_std > 0:
+        local += np.random.randn(*local.shape) * noise_std
     return local
 
 
@@ -101,47 +104,91 @@ path_gt = [
     [2.0, 4.2, np.radians(70)],
 ]
 
-# -----------------------
-# Reconstruct Path via ICP
-# -----------------------
 
-trajectory_est = [[0.0, 0.0, 0.0]]  # Start from origin
-pose_est = np.eye(3)
+def run_simulation(scene, path_gt, noise_std):
+    trajectory_est = [[0.0, 0.0, 0.0]]  # Start from origin
+    pose_est = np.eye(3)
 
-prev_scan = extract_view(scene, path_gt[0])
+    prev_scan = extract_view(scene, path_gt[0], noise_std=noise_std)
 
-for i in range(1, len(path_gt)):
-    cur_scan = extract_view(scene, path_gt[i])
-    R_icp, t_icp = icp(cur_scan, prev_scan)
+    for i in range(1, len(path_gt)):
+        cur_scan = extract_view(scene, path_gt[i], noise_std=noise_std)
+        R_icp, t_icp = icp(cur_scan, prev_scan)
 
-    # Compose transformation
-    T = np.eye(3)
-    T[:2, :2] = R_icp
-    T[:2, 2] = t_icp
-    pose_est = pose_est @ T
+        # Compose transformation
+        T = np.eye(3)
+        T[:2, :2] = R_icp
+        T[:2, 2] = t_icp
+        pose_est = pose_est @ T
 
-    # Extract estimated position
-    x, y = pose_est[:2, 2]
-    theta = np.arctan2(pose_est[1, 0], pose_est[0, 0])
-    trajectory_est.append([x, y, theta])
+        # Extract estimated position
+        x, y = pose_est[:2, 2]
+        theta = np.arctan2(pose_est[1, 0], pose_est[0, 0])
+        trajectory_est.append([x, y, theta])
 
-    prev_scan = cur_scan
+        prev_scan = cur_scan
 
-# -----------------------
-# Visualization
-# -----------------------
-
-# Convert to arrays
-path_gt_np = np.array([[p[0], p[1]] for p in path_gt])
-path_est_np = np.array(
-    [
+    # Convert to arrays
+    path_gt_np = np.array([[p[0], p[1]] for p in path_gt])
+    path_est_np = np.array(
         [
-            p[0] + path_gt_np[0][0],
-            p[1] + path_gt_np[0][1],
+            [
+                p[0] + path_gt_np[0][0],
+                p[1] + path_gt_np[0][1],
+            ]
+            for p in trajectory_est
         ]
-        for p in trajectory_est
-    ]
+    )
+
+    # Calculate error (e.g., mean squared error of positions)
+    error = np.mean(np.linalg.norm(path_gt_np - path_est_np, axis=1))
+    return error, path_est_np, trajectory_est
+
+
+# -----------------------
+# Simulation Parameters
+# -----------------------
+
+scene = generate_scene()
+
+# Ground truth robot path (x, y, theta)
+path_gt = [
+    [1.0, 1.0, np.radians(0)],
+    [1.5, 0.8, np.radians(0)],
+    [2.0, 1.0, np.radians(10)],
+    [3.0, 1.5, np.radians(15)],
+    [3.5, 2.5, np.radians(30)],
+    [3.2, 3.8, np.radians(45)],
+    [2.0, 4.2, np.radians(70)],
+]
+
+# -----------------------
+# Error vs. Noise Plot
+# -----------------------
+
+noise_levels = np.linspace(0.0, 0.1, 10)
+errors = []
+
+for noise_std in noise_levels:
+    error, _, _ = run_simulation(scene, path_gt, noise_std)
+    errors.append(error)
+
+plt.figure(figsize=(10, 6))
+plt.plot(noise_levels, errors, "b-o")
+plt.xlabel("Noise Standard Deviation")
+plt.ylabel("Localization Error (MSE)")
+plt.title("Localization Error vs. Sensor Noise")
+plt.grid(True)
+plt.show()
+
+# -----------------------
+# Example Visualization with a specific noise level (e.g., 0.01)
+# -----------------------
+error_example, path_est_np, trajectory_est = run_simulation(
+    scene, path_gt, noise_std=0.05
 )
+
+path_gt_np = np.array([[p[0], p[1]] for p in path_gt])
 
 plt.figure(figsize=(8, 8))
 plt.scatter(scene[:, 0], scene[:, 1], s=3, c="blue", label="Scene")
@@ -161,6 +208,8 @@ plt.plot(path_gt_np[:, 0], path_gt_np[:, 1], "g-o", label="Ground Truth Path")
 plt.plot(path_est_np[:, 0], path_est_np[:, 1], "r--o", label="Estimated Path (ICP)")
 plt.legend()
 plt.axis("equal")
-plt.title("Robot Path Reconstruction via ICP")
+plt.title(
+    f"Robot Path Reconstruction via ICP (Noise Std: 0.01, Error: {error_example:.4f})"
+)
 plt.grid(False)
 plt.show()
