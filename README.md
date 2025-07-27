@@ -33,9 +33,14 @@ The `test.py` script generates two plots:
 -   **Before ICP Alignment**: Shows the original and transformed point clouds before alignment.
 -   **After ICP Alignment**: Shows the point clouds after ICP has aligned them.
 -   **ICP Alignment Error Over Iterations**: Shows the convergence of the ICP algorithm.
+<img width="946" height="623" alt="Figure_2" src="https://github.com/user-attachments/assets/632ac520-f309-475f-8910-293ff6feeca7" />
+<img width="946" height="623" alt="Figure_3" src="https://github.com/user-attachments/assets/a0f74152-192c-47d1-b931-7ee5ef6543fc" />
+
 
 The `robot.py` script generates a plot showing:
 
 -   The static scene (blue dots).
 -   The ground truth robot path (green line with circles) and its orientation (green arrows).
 -   The estimated robot path reconstructed using ICP (red dashed line with circles) and its orientation (red arrows).
+<img width="946" height="623" alt="Figure_1" src="https://github.com/user-attachments/assets/0be72b9f-0333-4e53-8669-afba5113d75c" />
+
